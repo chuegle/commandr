@@ -18,6 +18,7 @@
 #
 
 from commandr import command, Run
+from functools import wraps
 
 @command('greet')
 def SayGreeting(name, title='Mr.', times=1, comma=False, capslock=False):
@@ -36,6 +37,19 @@ def SayGreeting(name, title='Mr.', times=1, comma=False, capslock=False):
 
   for _ in xrange(times):
     print message
+
+def some_decorator(fn):
+  @wraps(fn)
+  def _wrapper(*args, **kwargs):
+    print 'Wrapper Here!'
+    return fn(*args, **kwargs)
+  return _wrapper
+
+@command('test_decorated')
+@some_decorator
+def DecoratedFunction(arg1, arg2=1):
+    """"""
+    print arg1, arg2
 
 if __name__ == '__main__':
   Run()

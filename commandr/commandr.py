@@ -139,8 +139,14 @@ def Run():
   # Get the command function from the registry.
   cmd_fn = _ALL_COMMANDS[cmd_name]
 
+  # Check if the command function is wrapped with other decorators, and if so,
+  # find the original function signature.
+  cmd_fn_root = cmd_fn
+  while hasattr(cmd_fn_root, '__wrapped__'):
+    cmd_fn_root = getattr(cmd_fn_root, '__wrapped__')
+
   # Reflect the command function's arguments.
-  argspec = inspect.getargspec(cmd_fn)
+  argspec = inspect.getargspec(cmd_fn_root)
 
   # Populates defaults iff there is a default
   defaults_dict = {}

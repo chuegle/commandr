@@ -14,5 +14,6 @@
 
 __all__ = ['command', 'Run']
 
+import functools_patch
 from commandr import Run, command
 
