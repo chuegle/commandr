@@ -171,6 +171,19 @@ name with "no_" prefixed. For example, to set 'cache' to False for 'get':
 $ python features.py get somekey --no-cache
 ```
 
+### List Parameters
+
+If a parameter has a default value that is a list, Commandr will accept multiple
+values for the parameter, joining them together to form a list.  The type for
+the values in the list will be string.
+
+Multiple values can be specified by repeating the switch:
+```
+my-command --arg value1 --arg value2 --arg value3
+```
+will lead to:
+arg=[value1, value2, value3]
+
 ### Documentation Generation
 
 Command help is automatically generated, using the signature and docstring of
@@ -252,10 +265,63 @@ $ python features.py put somekey1 --transaction
 >   --transaction
 ```
 
+To print the usage message after the command is called, call
+commandr.Usage(message).  This will print the command usage and exit.
+
+### Value Transformation
+
+The value of an argument can be transformed before the command is called using
+the transform option on command() and global Options. To transform a value
+pass a dict with the argument name as a the key and a callable that accepts
+key and value as arguments and returns the new value of the argument.  If the
+value is None, transformation is not called.  Transformation will be called
+before Value Validation.
+
+An example:
+```
+def ConvertToDict(key, value):
+  """Converts str of format 'a=b;c=d;e=f' to a dict."""
+  if not isinstance(value, dict):
+    return dict(kv.split('=', 1) for kv in value.split(';'))
+  else:
+    # if value is not returned here, the new value will be None
+    return value
+
+@command(tranform={'extra':ConvertToDict},
+         validate={'extra':lambda k,v: 'msg' in extra})
+def MyFunction(name, extra={'msg':'Hi'}):
+```
+
+### Value Validation
+
+To validate the values passed as part of the argument parsing, pass a dict
+object to the command() function with key/value pairs where the value is
+either a list containing the passed value or a callable that accepts the
+argument name and argument value and returns True if the argument passes
+or False if it does not.  If the value is None, validation is not called.
+
+An example:
+```
+def IsCapitalized(key, name):
+  return name == str(name).capitalize()
+
+@command(validate={'title':['Mr', 'Mrs', 'Sir', 'Madam'],
+                   'first_name':IsCapitalized,
+                   'last_name':IsCapitalized})
+def MyFunction(title, first_name, last_name):
+  ...
+```
+
+It is also possible to declare a validation dict as a global option.  If it is
+set globally, any command that is run by Commandr will use the global
+validation if one of its arguments is in that dictionary.  However, A local
+validate for a @command will override the global validation.  See Options
+section for details on how to set Options.
+
 ### Options
 
 There are several options that can be set to modify the behavior of the parser
-generation. These options can be set by calling the SeeOption() function, or
+generation. These options can be set by calling the SetOptions() function, or
 as parameters to the Run() function. Values set by Run() take precedence.
 
 The available parameters are:
@@ -272,6 +338,19 @@ the command is run with no arguments or help.  Default is True.
 ##### main:
 If set, Commandr will use the supplied value as the command name to run
 if no command name is supplied.  It will override any previous values.
+
+##### validate:
+If set, Commandr will use the provided dict to set global Validation for any
+command that has an argument with a key in the dict.  If a global validate
+dict is set a second time, it will override all values in the original dict.
+If a command() passes a validate dict, it will only override values present
+in the local dict.   See the Validation section for details off the argument.
+
+##### transform:
+Sets the Global options for transformation (see Value Transformation).
+If set multiple times, the all values will be overridden by the last global
+option.  command(transform=..) options will override global options only for
+the values set in the local options.
 
 ##### hyphenate:
 If True (default), then any argument containing an underscore ('_') will be

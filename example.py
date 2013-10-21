@@ -13,11 +13,9 @@
 # limitations under the License.
 #
 # =============================================================================
-#
-# Example usage of commandr.
-#
+"""Example usage of commandr."""
 
-from commandr import command, Run, wraps
+from commandr import command, Run, Usage, wraps
 
 @command('greet')
 def SayGreeting(name, title='Mr.', times=1, comma=False, caps_lock=False):
@@ -39,21 +37,37 @@ def SayGreeting(name, title='Mr.', times=1, comma=False, caps_lock=False):
 
 @command
 def simple_greet(name):
-  """An example of @command without arguments.
+  """An example of @command without arguments and printing Usage.
 
   Arguments:
     name - Name to greet.
   """
+  if name == 'John':
+    Usage("We don't like John")
   print 'Hi %s!' % name
 
-@command()
-def another_simple_greet(name):
-  """An example of @command() without arguments.
+def ConvertToDict(key, value):
+  """Converts str of format 'a=b;c=d;e=f' to a dict."""
+  if not isinstance(value, dict):
+    return dict(kv.split('=', 1) for kv in value.split(';'))
+  else:
+    # if value is not returned here, the new value will be None
+    return value
+
+@command(validate={'name':['Kevin', 'Nick', 'Mike', 'Wade']},
+         transform={'name':lambda k,v: v.capitalize(),
+                    'extra':ConvertToDict})
+def another_simple_greet(name=None, extra={'hi':'Aloha', 'end':'!'}):
+  """An example of @command(), specifying the possible values for name.
+
+  This overrides the global capitalization check.
 
   Arguments:
-    name - Name to greet.
+    name - Name to greet.  It must be capitalized.
+    extra - Containing the 'hi' message and the end of the sentence '!'.
+            Format: --extra "hi=Hi;end=..."
   """
-  print 'Aloha %s!' % name
+  print '%s %s%s' % (extra['hi'], name, extra['end'])
 
 def some_decorator(fn):
   @wraps(fn)
@@ -68,5 +82,14 @@ def DecoratedFunction(arg1, arg2=1):
     """An example usage of stacked decorators."""
     print arg1, arg2
 
+def NameCheck(arg_name, arg_value):
+  """A name must be capitalized.
+
+  This doc will be printed up to the first empty line if the check fails.
+  """
+  return arg_value == arg_value.capitalize()
+
 if __name__ == '__main__':
-  Run(hyphenate=True)
+  # This requires every command that uses 'name' as an argument to make sure
+  # that name is capitalized, unless the possible_value is overridden.
+  Run(hyphenate=True, validate={'name':NameCheck})
