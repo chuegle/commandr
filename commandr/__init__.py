@@ -16,7 +16,6 @@ __all__ = [
     'command',
     'Run',
     'SetOptions',
-    'Usage',
     'update_wrapper',
     'wraps',
     'MonkeyPatchFunctools']
@@ -29,7 +28,6 @@ command = _COMMANDR.command
 Run = _COMMANDR.Run
 RunFunction = _COMMANDR.RunFunction
 SetOptions = _COMMANDR.SetOptions
-Usage = _COMMANDR.Usage
 
 # Export the decorator utils.
 from functools_util import update_wrapper, wraps, MonkeyPatchFunctools

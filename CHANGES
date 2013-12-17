@@ -4,19 +4,10 @@
   a specific command (help [command]).
 - The option 'help_docs' was added to print __main__.__doc__ on help messages.
   It defaults to True.
-- The option 'main' has been added to SetOptions and command() to set a command
+- The option main has been added to SetOptions and command() to set a command
   to get run when no command is supplied. Default is help.
 - The option 'ignore_self' can now be passed in command() to override the global
   value on a per function basis.
-- commandr.Usage(my_message) can now be called to print the Usage.
-- If an argument has a default that is a list, Commandr will now allow multiple
-  values for that list.
-- Arguments can now be validated during command parsing if
-  validate={argument_name=[..] or callable} is passed to command() or set as a
-  global option.
-- Arguments can now be transformed during command parsing if
-  transform={argument_name=callable} is passed to command() or set as a global
-  option.
 
 1.2.0
 ========

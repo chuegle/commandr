@@ -90,7 +90,7 @@
 #
 # There are several options that affect the form of the generated parser. The
 # options can be set by calling:
-#   SetOptions(hyphenate=<bool>, show_all_help_variants=<bool>)
+#   SetOption(hyphenate=<bool>, show_all_help_variants=<bool>)
 #
 # All options can also be set as arguments to Run(). Values set in that way
 # will take precedence.
@@ -138,9 +138,6 @@ class Commandr(object):
     self.hidden = True
     self.ignore_self = False
     self.main_docs = True
-    self.main = None
-    self.validate = None
-    self.transform = None
 
     # Internal flag indicating whether to expect the command name as the first
     # command line argument.
@@ -149,19 +146,18 @@ class Commandr(object):
     # Mapping of all command names to the respective command function.
     self.parser = None
     self._all_commands = {}
-    self.current_command = None
+    self.main = None
 
     # List of commands in the order they appeared, of the format:
     #   [(name, callable, category)]
     self._command_list = []
     self._command_info = namedtuple(
-      '_COMMAND_INFO', ['name', 'callable', 'category', 'ignore_self',
-                        'validate', 'transform'])
+      '_COMMAND_INFO', ['name', 'callable', 'category', 'ignore_self'])
 
     self.command('help', ignore_self=True)(self._HelpExitNoCommand)
 
   def command(self, command_name=None, category=None, main=False,
-              ignore_self=None, validate=None, transform=None):
+              ignore_self=None):
     """Decorator that marks a function as a 'command' which can be invoked with
     arguments from the command line. e.g.:
 
@@ -182,11 +178,6 @@ class Commandr(object):
         main.
       ignore_self - If True or False, it will apply the ignore_self option for
         this command, while others use the global default.
-      validate - A dict of key/list pairs that limit the possible values
-        returned for a specific argument.
-      transform - A key/callable dict that will call the callable if the
-          argument is a key.  It will set the value to whatever the callable
-          returns.  This runs before validation.
     Returns:
       decorator/function to register the command.
     """
@@ -194,8 +185,7 @@ class Commandr(object):
       final_name = (cmd_fn_name if cmd_fn_name is not None
                     else command_name if command_name is not None
                     else cmd_fn.func_name)
-      info = self._command_info(final_name, cmd_fn, category, ignore_self,
-                                validate or {}, transform or {})
+      info = self._command_info(final_name, cmd_fn, category, ignore_self)
       self._all_commands[final_name] = info
       if main:
         if not self.main:
@@ -218,9 +208,7 @@ class Commandr(object):
       show_all_help_variants=None,
       ignore_self=None,
       main_docs=None,
-      main=None,
-      validate=None,
-      transform=None):
+      main=None):
     """Set commandr options. Any argument not set to None will be applied
     (otherwise it will retain its current value).
 
@@ -238,14 +226,6 @@ class Commandr(object):
           command is specified.  Default is True.
       main - If set, it will use the supplied value as the command name to run
           if no command name is supplied.  It will override any previous values.
-      validate - If a dict of key/list or callable is provided, it will
-          require any command called that has that key as an argument to limit
-          the allowed values.   If a list is provided for the key, the argument
-          must be in that list.  If a callable is provided, it will be called
-          with the value as an argument.
-      transform - A key/callable dict that will call the callable if the
-          argument is a key.  It will set the value to whatever the callable
-          returns.  This runs before validation.
     """
     # Anything added here should also be added to the RunFunction interface.
     if hyphenate is not None:
@@ -258,10 +238,6 @@ class Commandr(object):
       self.main_docs = main_docs
     if main is not None:
       self.main = main
-    if validate is not None:
-      self.validate = validate
-    if transform is not None:
-      self.transform = transform
 
   def Run(self, *args, **kwargs):
     """Main function to take command line arguments, and parse them into a
@@ -303,9 +279,7 @@ class Commandr(object):
       show_all_help_variants=None,
       ignore_self=None,
       main_doc=None,
-      main=None,
-      validate=None,
-      transform=None):
+      main=None):
     """Method to explicitly execute a given function against the command line
     arguments. If this method is called directly, the command name will not be
     expected in the arguments.
@@ -323,24 +297,15 @@ class Commandr(object):
           command is specified.  Default is True.
       main - If set, it will use the supplied value as the command name to run
           if no command name is supplied.  It will override any previous values.
-      validate - If a dict of key/list or callable is provided, it will
-          require any command called that has that key as an argument to limit
-          the allowed values.   If a list is provided for the key, the argument
-          must be in that list.  If a callable is provided, it will be called
-          with the value as an argument.
-      transform - A key/callable dict that will call the callable if the
-          argument is a key.  It will set the value to whatever the callable
-          returns.  This runs before validation.
     """
     self.SetOptions(hyphenate, show_all_help_variants, ignore_self, main_doc,
-                    main, validate, transform)
+                    main)
 
     cmd_name = cmd_name or ""
 
     argspec, defaults_dict = self._BuildOptParse(cmd_name)
 
     (options, args) = self.parser.parse_args()
-
     options_dict = vars(options)
 
     # If help, print our message, else remove it so it doesn't confuse the
@@ -350,14 +315,14 @@ class Commandr(object):
     elif 'help' in options_dict:
       del options_dict['help']
 
-    info = (self._all_commands.get(cmd_name)
-            or self._command_info(cmd_name, cmd_fn))
+    info = self._all_commands.get(cmd_name) or self._command_info()
     ignore = (info.ignore_self
               if info.ignore_self is not None
               else self.ignore_self)
 
     # If desired, add args into the options_dict
     args_to_parse = args[1:] if not self.no_command_arg else args
+
     if len(args_to_parse) > 0:
       skipped = 0
 
@@ -384,9 +349,8 @@ class Commandr(object):
 
         # Make sure the arg isn't already changed from the default.
         if (((key in defaults_dict and defaults_dict[key] != options_dict[key])
-             or (key not in defaults_dict and options_dict[key] is not None))
-            and value != options_dict[key]
-            and not isinstance(defaults_dict[key], list)):
+             or (key not in defaults_dict and options_dict[key] != None))
+            and value != options_dict[key]):
           self._HelpExitCommand(
               "Repeated option: %s\nOption: %s\nArgument: %s" % (
                   key, options_dict[key], value),
@@ -398,71 +362,16 @@ class Commandr(object):
             value = int(value)
           elif isinstance(defaults_dict[key], float):
             value = float(value)
-          elif  isinstance(defaults_dict[key], list):
-            if options_dict[key] is None:
-              value = options_dict[key] = [value]
-            else:
-              value = options_dict[key] + [value]
+
         # Update arg
         options_dict[key] = value
 
-    transforms = self.transform or {}
-    transforms.update(info.transform or {})
-    possible = self.validate or {}
-    possible.update(info.validate or {})
     for key, value in options_dict.iteritems():
-      if value is None:
-        if key not in defaults_dict:
-          self._HelpExitCommand(
+      if value == None and key not in defaults_dict:
+        self._HelpExitCommand(
             "All options without default values must be specified",
             cmd_name, cmd_fn, options_dict, argspec.args)
-        elif defaults_dict[key] is not None:
-          value = options_dict[key] = defaults_dict[key]
-      if value is not None:
-        message = None
-        # Transform
-        if key in transforms:
-          try:
-            options_dict[key] = value = transforms[key](key, value)
-          except Exception as e:
-            # If there was an error, set the error message
-            message = "Invalid value: %s=%s\n%s" % (key, value, str(e))
 
-        # Validate if there isn't an error message
-        if not message and key in possible:
-          # convert everything to list for convenience
-          val = [value] if not isinstance(value, list) else value
-          # figure out the check  (user callable or list check)
-          if callable(possible[key]):
-            check = possible[key]
-          else:
-            check = lambda k, v: v in possible[k]
-          error = None
-          # If there's an error in checking all values, catch it and make a
-          # message.
-          try:
-            success = all(check(key, v) for v in val)
-          except Exception as e:
-            success = False
-            error = str(e)
-          # Report if the check didn't pass
-          if not success:
-            message = "Invalid value for %s: %s" % (key, ",".join(val))
-            if isinstance(possible[key], list):
-              message += " not in [%s]" % (",".join(str(v)
-                                                    for v in possible[key]))
-            elif hasattr(check, '__doc__') and check.__doc__:
-              # Take the doc until the first empty line
-              doc = itertools.takewhile(
-                bool, [l.strip() for l in check.__doc__.split('\n')])
-              message += '\n' + " ".join(doc)
-            if error:
-              message += '\n' + error
-        if message:
-          self._HelpExitCommand(message, cmd_name, cmd_fn, options_dict,
-                                argspec.args)
-                                  
-    self.current_command = info
     result = cmd_fn(**options_dict)
 
     if result:
@@ -540,9 +449,6 @@ class Commandr(object):
         elif repr(defaults_dict[arg]) == 'True':
           self._AddOption(args, dest=arg, action='store_false',
                       default=True)
-        elif isinstance(defaults_dict[arg], list):
-          self._AddOption(args, dest=arg, action='append',
-                          type='string')
         else:
           if isinstance(defaults_dict[arg], int):
             arg_type = 'int'
@@ -601,14 +507,6 @@ class Commandr(object):
       if 'default' in kwargs_hidden:
         del kwargs_hidden['default']
       self.parser.add_option(*args_hidden, **kwargs_hidden)
-
-  def Usage(self, message=None):
-    """Prints out a Usage message and exits."""
-    if self.current_command:
-      self._HelpExitCommand(message, self.current_command.name,
-                            self.current_command.callable)
-    else:
-      self._HelpExitNoCommand(message=message)
 
   def _HelpExitNoCommand(self, cmd_name=None, message=None):
     """Prints the global help message listing all commands.
@@ -684,11 +582,7 @@ class Commandr(object):
         arglist = sorted(options_dict.keys())
       print "Current Options:"
       for arg in arglist:
-        arg_start =  " --%s=" % arg
-        arg_list = (arg_start.join(str(a) for a in options_dict[arg])
-                    if isinstance(options_dict[arg], list)
-                    else str(options_dict[arg]))
-        print "%s%s" % (arg_start, arg_list)
+        print " --%s=%s" % (arg, options_dict[arg])
       print ""
 
     # Emit the documentation for the command.
